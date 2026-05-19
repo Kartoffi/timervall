@@ -34,11 +34,21 @@
             "imageWidth": 76
           }
         }
-      ]
+      ],
+      "expo-sqlite",
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c4627d70-55e3-48e7-bed9-ec1abf4331d6"
+      }
+    },
+    "owner": "kartoffi"
   }
 }
