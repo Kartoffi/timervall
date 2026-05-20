@@ -12,6 +12,7 @@ module.exports = ({ config }: { config: ExpoConfig }) => {
     userInterfaceStyle: "automatic",
     ios: {
       icon: "./assets/expo.icon",
+      bundleIdentifier: "com.kartoffi.timervall",
     },
     android: {
       adaptiveIcon: {
