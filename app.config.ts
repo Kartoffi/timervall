@@ -21,6 +21,7 @@ module.exports = ({ config }: { config: ExpoConfig }) => {
         monochromeImage: "./assets/images/android-icon-monochrome.png",
       },
       predictiveBackGestureEnabled: false,
+      package: "com.kartoffi.timervall",
     },
     web: {
       output: "static",
@@ -36,7 +37,6 @@ module.exports = ({ config }: { config: ExpoConfig }) => {
           android: {
             image: "./assets/images/splash-icon.png",
             imageWidth: 76,
-            package: "com.kartoffi.timervall",
           },
         },
       ],
