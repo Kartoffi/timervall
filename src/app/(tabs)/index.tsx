@@ -1,15 +1,65 @@
-import { Link } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { useSQLiteContext } from "expo-sqlite";
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import Button from "../components/Button";
 
 export default function Index() {
+  const database = useSQLiteContext();
+  const [workouts, setWorkouts] = useState<{ id: number; name: string }[]>([]);
+  const [text, setText] = useState("");
+
+  const onChangeText = (newText: string) => {
+    setText(newText);
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchWorkouts();
+    }, []),
+  );
+
+  const handleAddWorkout = async () => {
+    try {
+      await database.runAsync("INSERT INTO workouts (name) VALUES (?);", [
+        text,
+      ]);
+      setText(""); // Clear input after adding
+      fetchWorkouts(); // Refresh list after adding
+    } catch (error) {
+      console.error("Error adding workout:", error);
+    }
+  };
+
+  const fetchWorkouts = async () => {
+    try {
+      const result: { id: number; name: string }[] = await database.getAllAsync(
+        "SELECT * FROM workouts;",
+      );
+      setWorkouts(result);
+    } catch (error) {
+      console.error("Error fetching workouts:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkouts();
+  }, []);
+
   return (
     <View style={styles.container}>
-      <Text>Hier gibts noch nix zu sehen c:</Text>
-      <Button label="Press me" />
-      <Link href="/options" style={styles.link}>
+      {workouts.map((workout) => (
+        <Text key={workout.id}>{workout.name}</Text>
+      ))}
+      <TextInput
+        style={styles.input}
+        onChangeText={onChangeText}
+        value={text}
+      />
+      <Button label="Add Workout" action={handleAddWorkout} />
+      {/* <Link href="/options" style={styles.link}>
         Go to Options
-      </Link>
+      </Link> */}
     </View>
   );
 }
@@ -23,5 +73,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  input: {
+    height: 40,
+    borderColor: "gray",
+    borderWidth: 1,
+    marginTop: 20,
+    paddingHorizontal: 10,
+    width: "80%",
   },
 });
