@@ -2,10 +2,12 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useState } from "react";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export default function TabLayout() {
   const db = useSQLiteContext();
   const [primaryColor, setPrimaryColor] = useState("#813dffff"); // fallback color
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchColor = async () => {
@@ -32,7 +34,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Workouts",
+          title: t("tabWorkouts"),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "barbell" : "barbell-outline"}
@@ -45,7 +47,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="options"
         options={{
-          title: "Options",
+          title: t("tabOptions"),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "settings" : "settings-outline"}

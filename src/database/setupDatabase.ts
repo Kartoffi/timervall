@@ -133,6 +133,17 @@ export async function createTablesAndDefaults(db: SQLiteDatabase) {
     );
   }
 
+  const languageSetting = await db.getFirstAsync(
+    "SELECT id FROM settings WHERE id = ?",
+    [3],
+  );
+  if (!languageSetting) {
+    await db.runAsync(
+      "INSERT INTO settings (id, name, value, category_id, setting_type_id) VALUES (?, ?, ?, ?, ?)",
+      [3, "Language", "de", generalCatId, 6],
+    );
+  }
+
   // Insert 'layout' category if not exists
   const layoutCat = await db.getFirstAsync(
     "SELECT id FROM setting_categories WHERE id = ?",

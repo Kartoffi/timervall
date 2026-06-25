@@ -1,14 +1,21 @@
 import { useRouter } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import React, { useEffect, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { dropAndCreateTables } from "../../database/setupDatabase";
+import {
+  AppLanguage,
+  updateLanguageSetting,
+  useTranslation,
+} from "../../i18n/useTranslation";
 import Button from "../components/Button";
 
 export default function Options() {
   const database = useSQLiteContext();
   const router = useRouter();
   const [resetting, setResetting] = useState(false);
+  const [changingLanguage, setChangingLanguage] = useState(false);
+  const { language, t, refreshLanguage } = useTranslation();
 
   const handleDeleteAll = async () => {
     if (resetting) return;
@@ -19,14 +26,15 @@ export default function Options() {
       await new Promise((resolve) => setTimeout(resolve, 150));
       await fetchCategories();
       await fetchSettings();
-      Alert.alert("Success", "All data and settings reset to default.");
+      await refreshLanguage();
+      Alert.alert(t("resetSuccessTitle"), t("resetSuccessMessage"));
       // Navigate to workouts tab to trigger re-fetch
       router.replace("/");
     } catch (error) {
       console.error("Failed to reset data:", error);
       Alert.alert(
-        "Error",
-        `Failed to reset data: ${error instanceof Error ? error.message : String(error)}`,
+        t("errorTitle"),
+        `${t("resetFailedPrefix")}: ${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
       setResetting(false);
@@ -108,8 +116,52 @@ export default function Options() {
     fetchSettings();
   }, [database]);
 
+  const handleChangeLanguage = async (nextLanguage: AppLanguage) => {
+    if (changingLanguage || language === nextLanguage) return;
+    setChangingLanguage(true);
+
+    try {
+      await updateLanguageSetting(database, nextLanguage);
+      await refreshLanguage();
+    } catch (error) {
+      console.error("Error updating language:", error);
+      Alert.alert(t("errorTitle"), String(error));
+    } finally {
+      setChangingLanguage(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
+      <Text style={styles.title}>{t("optionsTitle")}</Text>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t("language")}</Text>
+        <View style={styles.languageRow}>
+          <Pressable
+            style={[
+              styles.languageButton,
+              language === "de" && styles.languageButtonActive,
+            ]}
+            onPress={() => handleChangeLanguage("de")}
+            disabled={changingLanguage}
+          >
+            <Text style={styles.languageButtonText}>{t("languageGerman")}</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.languageButton,
+              language === "en" && styles.languageButtonActive,
+            ]}
+            onPress={() => handleChangeLanguage("en")}
+            disabled={changingLanguage}
+          >
+            <Text style={styles.languageButtonText}>
+              {t("languageEnglish")}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
       {settingCategories.map((category) => (
         <View key={category.id}>
           <Text>{category.name}</Text>
@@ -123,9 +175,9 @@ export default function Options() {
         </View>
       ))}
       <Button
-        label="Delete All Data"
+        label={t("deleteAllData")}
         action={handleDeleteAll}
-        disabled={resetting}
+        disabled={resetting || changingLanguage}
       />
     </View>
   );
@@ -134,7 +186,42 @@ export default function Options() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    padding: 20,
+    gap: 12,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+  },
+  section: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: "#fff",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 10,
+  },
+  languageRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  languageButton: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#f6f6f6",
+  },
+  languageButtonActive: {
+    borderColor: "#333",
+    backgroundColor: "#e9e9e9",
+  },
+  languageButtonText: {
+    fontSize: 14,
   },
 });
