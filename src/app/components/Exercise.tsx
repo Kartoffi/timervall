@@ -1,3 +1,4 @@
+import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useEffect, useRef, useState } from "react";
 import {
     Modal,
@@ -278,15 +279,21 @@ export default function Exercise({
               : startCountdown(set, field)
           }
         >
-          <Text style={styles.timerControlButtonText}>
-            {isRunning ? t("pauseTimer") : t("startTimer")}
-          </Text>
+          <View style={styles.timerControlButtonContent}>
+            <Ionicons
+              name={isRunning ? "pause" : "play"}
+              size={12}
+              color="#333"
+            />
+          </View>
         </Pressable>
         <Pressable
           style={styles.timerControlButton}
           onPress={() => resetCountdown(set, field)}
         >
-          <Text style={styles.timerControlButtonText}>{t("resetTimer")}</Text>
+          <View style={styles.timerControlButtonContent}>
+            <Ionicons name="refresh" size={12} color="#333" />
+          </View>
         </Pressable>
       </View>
     );
@@ -1183,6 +1190,11 @@ const styles = StyleSheet.create({
   timerControlButtonText: {
     fontSize: 11,
     fontWeight: "600",
+  },
+  timerControlButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   editModalBackdrop: {
     flex: 1,
