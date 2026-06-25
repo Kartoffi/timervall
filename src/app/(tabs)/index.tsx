@@ -1,8 +1,9 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useSQLiteContext } from "expo-sqlite";
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, TextInput, View } from "react-native";
 import Button from "../components/Button";
+import Workout from "../components/Workout";
 
 export default function Index() {
   const database = useSQLiteContext();
@@ -49,7 +50,7 @@ export default function Index() {
   return (
     <View style={styles.container}>
       {workouts.map((workout) => (
-        <Text key={workout.id}>{workout.name}</Text>
+        <Workout key={workout.id} label={workout.name} />
       ))}
       <TextInput
         style={styles.input}

@@ -1,12 +1,32 @@
-import { Tabs } from "expo-router";
-
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { Tabs } from "expo-router";
+import { useSQLiteContext } from "expo-sqlite";
+import { useEffect, useState } from "react";
 
 export default function TabLayout() {
+  const db = useSQLiteContext();
+  const [primaryColor, setPrimaryColor] = useState("#813dffff"); // fallback color
+
+  useEffect(() => {
+    const fetchColor = async () => {
+      try {
+        const result = (await db.getFirstAsync(
+          "SELECT value FROM settings WHERE name = ?",
+          ["primary_color"],
+        )) as { value?: string } | undefined;
+
+        if (result && result.value) setPrimaryColor(result.value);
+      } catch (e) {
+        console.error("Error fetching primary color:", e);
+      }
+    };
+    fetchColor();
+  }, [db]);
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#813dffff",
+        tabBarActiveTintColor: primaryColor,
       }}
     >
       <Tabs.Screen
