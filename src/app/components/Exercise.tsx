@@ -88,6 +88,8 @@ export default function Exercise({
   const [loadingSets, setLoadingSets] = useState(false);
   const [menuSetId, setMenuSetId] = useState<number | null>(null);
   const [exerciseMenuOpen, setExerciseMenuOpen] = useState(false);
+  const [activeAddSetId, setActiveAddSetId] = useState<number | null>(null);
+  const [timerDrafts, setTimerDrafts] = useState<Record<string, string>>({});
   const [countdowns, setCountdowns] = useState<Record<string, CountdownState>>(
     {},
   );
@@ -180,6 +182,148 @@ export default function Exercise({
     });
   };
 
+  const parseLooseTimerInput = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return 0;
+    }
+
+    if (trimmed.includes(":")) {
+      const [minutesRaw = "", secondsRaw = ""] = trimmed.split(":");
+      const minutesValue = Number.parseInt(minutesRaw.replace(/\D/g, ""), 10);
+      const secondsValue = Number.parseInt(secondsRaw.replace(/\D/g, ""), 10);
+      const boundedMinutes = Number.isFinite(minutesValue)
+        ? Math.min(MAX_TIME_PART, Math.max(0, minutesValue))
+        : 0;
+      const boundedSeconds = Number.isFinite(secondsValue)
+        ? Math.min(MAX_SECONDS_PART, Math.max(0, secondsValue))
+        : 0;
+      return boundedMinutes * 60 + boundedSeconds;
+    }
+
+    const digits = trimmed.replace(/\D/g, "");
+    if (!digits) {
+      return 0;
+    }
+
+    const padded = digits.padStart(3, "0");
+    const minutesValue = Number.parseInt(padded.slice(0, -2), 10);
+    const secondsValue = Number.parseInt(padded.slice(-2), 10);
+    const boundedMinutes = Number.isFinite(minutesValue)
+      ? Math.min(MAX_TIME_PART, Math.max(0, minutesValue))
+      : 0;
+    const boundedSeconds = Number.isFinite(secondsValue)
+      ? Math.min(MAX_SECONDS_PART, Math.max(0, secondsValue))
+      : 0;
+
+    return boundedMinutes * 60 + boundedSeconds;
+  };
+
+  const getTimeParts = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return { minutes: "", seconds: "" };
+    }
+
+    if (trimmed.includes(":")) {
+      const [minutesRaw = "", secondsRaw = ""] = trimmed.split(":");
+      const minutesDigits = minutesRaw.replace(/\D/g, "").slice(0, 2);
+      const secondsDigits = secondsRaw.replace(/\D/g, "").slice(0, 2);
+
+      return {
+        minutes:
+          minutesDigits.length > 0
+            ? String(
+                Math.min(
+                  MAX_TIME_PART,
+                  Math.max(0, Number.parseInt(minutesDigits, 10)),
+                ),
+              )
+            : "",
+        seconds:
+          secondsDigits.length > 0
+            ? String(
+                Math.min(
+                  MAX_SECONDS_PART,
+                  Math.max(0, Number.parseInt(secondsDigits, 10)),
+                ),
+              )
+            : "",
+      };
+    }
+
+    const numericSeconds = Number.parseInt(trimmed.replace(/\D/g, ""), 10);
+    if (!Number.isFinite(numericSeconds)) {
+      return { minutes: "", seconds: "" };
+    }
+
+    const bounded = Math.max(
+      0,
+      Math.min(MAX_TIME_PART * 60 + MAX_SECONDS_PART, numericSeconds),
+    );
+
+    return {
+      minutes: String(Math.floor(bounded / 60)),
+      seconds: String(bounded % 60),
+    };
+  };
+
+  const composeTimeValue = (minutesText: string, secondsText: string) => {
+    const minutesValue = minutesText ? Number.parseInt(minutesText, 10) : 0;
+    const secondsValue = secondsText ? Number.parseInt(secondsText, 10) : 0;
+
+    const boundedMinutes = Number.isFinite(minutesValue)
+      ? Math.min(MAX_TIME_PART, Math.max(0, minutesValue))
+      : 0;
+    const boundedSeconds = Number.isFinite(secondsValue)
+      ? Math.min(MAX_SECONDS_PART, Math.max(0, secondsValue))
+      : 0;
+
+    return `${boundedMinutes}:${boundedSeconds}`;
+  };
+
+  const setTimerValue = (
+    setId: number,
+    field: TimerField,
+    totalSeconds: number,
+  ) => {
+    const boundedSeconds = Math.max(
+      0,
+      Math.min(MAX_TIME_PART * 60 + MAX_SECONDS_PART, Math.floor(totalSeconds)),
+    );
+    const nextValue = formatSeconds(boundedSeconds);
+    const key = getTimerKey(setId, field);
+
+    setSets((previous) =>
+      previous.map((set) =>
+        set.id === setId
+          ? {
+              ...set,
+              [field]: nextValue,
+            }
+          : set,
+      ),
+    );
+
+    setCountdowns((previous) => ({
+      ...previous,
+      [key]: {
+        initialSeconds: boundedSeconds,
+        remainingSeconds: boundedSeconds,
+        isRunning: false,
+      },
+    }));
+
+    setTimerDrafts((previous) => {
+      if (!previous[key]) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[key];
+      return next;
+    });
+  };
+
   const startCountdown = (set: ExerciseSet, field: TimerField) => {
     const configuredSeconds = getConfiguredSeconds(set, field);
     if (configuredSeconds <= 0) {
@@ -257,7 +401,14 @@ export default function Exercise({
     }));
   };
 
-  const renderCountdownControls = (set: ExerciseSet, field: TimerField) => {
+  const renderCountdownControls = (
+    set: ExerciseSet,
+    field: TimerField,
+    options?: {
+      allowInlineEdit?: boolean;
+      onEditPress?: () => void;
+    },
+  ) => {
     const key = getTimerKey(set.id, field);
     const countdown = countdowns[key];
     const configuredSeconds = getConfiguredSeconds(set, field);
@@ -265,12 +416,48 @@ export default function Exercise({
       ? countdown.remainingSeconds
       : configuredSeconds;
     const isRunning = countdown?.isRunning ?? false;
+    const allowInlineEdit = options?.allowInlineEdit ?? true;
+    const onEditPress = options?.onEditPress;
+    const draftValue = timerDrafts[key];
+    const displayValue = draftValue ?? formatSeconds(remainingSeconds);
 
     return (
       <View style={styles.timerControlsRow}>
-        <Text style={styles.timerCountdownText}>
-          {formatSeconds(remainingSeconds)}
-        </Text>
+        {isRunning ? (
+          <Text style={styles.timerCountdownText}>
+            {formatSeconds(remainingSeconds)}
+          </Text>
+        ) : !allowInlineEdit ? (
+          <Pressable onPress={onEditPress} disabled={!onEditPress}>
+            <Text style={styles.savedValueText}>
+              {formatSeconds(remainingSeconds)}
+            </Text>
+          </Pressable>
+        ) : (
+          <TextInput
+            style={styles.timerCountdownInput}
+            value={displayValue}
+            onFocus={() => {
+              setTimerDrafts((previous) => ({
+                ...previous,
+                [key]: formatSeconds(remainingSeconds),
+              }));
+            }}
+            onChangeText={(value) => {
+              setTimerDrafts((previous) => ({
+                ...previous,
+                [key]: value,
+              }));
+            }}
+            onBlur={() => {
+              const draft = timerDrafts[key] ?? displayValue;
+              const parsed = parseLooseTimerInput(draft);
+              setTimerValue(set.id, field, parsed);
+            }}
+            keyboardType="number-pad"
+            selectTextOnFocus
+          />
+        )}
         <Pressable
           style={styles.timerControlButton}
           onPress={() =>
@@ -299,11 +486,56 @@ export default function Exercise({
     );
   };
 
+  const renderModalTimerInput = (
+    set: ExerciseSet,
+    field: TimerField,
+    autoFocus = false,
+  ) => {
+    const parts = getTimeParts(set[field]);
+    const minutesValue = parts.minutes;
+    const secondsValue = parts.seconds;
+
+    const updateModalTimePart = (
+      part: "minutes" | "seconds",
+      rawInput: string,
+    ) => {
+      const sanitized = rawInput.replace(/\D/g, "").slice(-2);
+      const nextMinutes = part === "minutes" ? sanitized : minutesValue;
+      const nextSeconds = part === "seconds" ? sanitized : secondsValue;
+
+      updateSet(set.id, field, composeTimeValue(nextMinutes, nextSeconds));
+    };
+
+    return (
+      <View style={styles.timeInputRow}>
+        <TextInput
+          style={[styles.input, styles.timePartInput]}
+          value={minutesValue}
+          onChangeText={(value) => updateModalTimePart("minutes", value)}
+          placeholder="mm"
+          keyboardType="number-pad"
+          autoFocus={autoFocus}
+          selectTextOnFocus
+        />
+        <Text style={styles.timeSeparator}>:</Text>
+        <TextInput
+          style={[styles.input, styles.timePartInput]}
+          value={secondsValue}
+          onChangeText={(value) => updateModalTimePart("seconds", value)}
+          placeholder="ss"
+          keyboardType="number-pad"
+          selectTextOnFocus
+        />
+      </View>
+    );
+  };
+
   const addSet = () => {
+    const nextSetId = Date.now() + setsRef.current.length;
     setSets((previous) => [
       ...previous,
       {
-        id: Date.now() + previous.length,
+        id: nextSetId,
         persistedSetId: null,
         createdAt: new Date().toISOString(),
         exerciseTypeValue: "",
@@ -316,6 +548,7 @@ export default function Exercise({
         editingField: null,
       },
     ]);
+    setActiveAddSetId(nextSetId);
   };
 
   useEffect(() => {
@@ -376,113 +609,6 @@ export default function Exercise({
     );
   };
 
-  const getTimeParts = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return { minutes: "", seconds: "" };
-    }
-
-    if (trimmed.includes(":")) {
-      const [minutesRaw = "", secondsRaw = ""] = trimmed.split(":");
-      const minutesDigits = minutesRaw.replace(/\D/g, "").slice(0, 2);
-      const secondsDigits = secondsRaw.replace(/\D/g, "").slice(0, 2);
-      return {
-        minutes:
-          minutesDigits.length > 0
-            ? String(Number.parseInt(minutesDigits, 10)).padStart(2, "0")
-            : "",
-        seconds:
-          secondsDigits.length > 0
-            ? String(Number.parseInt(secondsDigits, 10)).padStart(2, "0")
-            : "",
-      };
-    }
-
-    const numericSeconds = Number.parseInt(trimmed.replace(/\D/g, ""), 10);
-    if (!Number.isFinite(numericSeconds)) {
-      return { minutes: "", seconds: "" };
-    }
-
-    const bounded = Math.max(
-      0,
-      Math.min(MAX_TIME_PART * 60 + MAX_SECONDS_PART, numericSeconds),
-    );
-    const minutes = Math.floor(bounded / 60);
-    const seconds = bounded % 60;
-    return {
-      minutes: String(minutes).padStart(2, "0"),
-      seconds: String(seconds).padStart(2, "0"),
-    };
-  };
-
-  const composeTimeValue = (minutesText: string, secondsText: string) => {
-    const minutesValue = minutesText ? Number.parseInt(minutesText, 10) : 0;
-    const secondsValue = secondsText ? Number.parseInt(secondsText, 10) : 0;
-
-    const boundedMinutes = Number.isFinite(minutesValue)
-      ? Math.min(MAX_TIME_PART, Math.max(0, minutesValue))
-      : 0;
-    const boundedSeconds = Number.isFinite(secondsValue)
-      ? Math.min(MAX_SECONDS_PART, Math.max(0, secondsValue))
-      : 0;
-
-    return `${boundedMinutes}:${boundedSeconds}`;
-  };
-
-  const updateTimePart = (
-    setId: number,
-    field: "exerciseTypeValue" | "restTime",
-    part: "minutes" | "seconds",
-    rawInput: string,
-  ) => {
-    const sanitized = rawInput.replace(/\D/g, "").slice(-2);
-    const currentSet = setsRef.current.find((item) => item.id === setId);
-    const currentValue = currentSet?.[field] ?? "";
-    const currentParts = getTimeParts(currentValue);
-
-    const nextMinutes = part === "minutes" ? sanitized : currentParts.minutes;
-    const nextSeconds = part === "seconds" ? sanitized : currentParts.seconds;
-
-    updateSet(setId, field, composeTimeValue(nextMinutes, nextSeconds));
-  };
-
-  const renderTimeInputs = (
-    set: ExerciseSet,
-    field: "exerciseTypeValue" | "restTime",
-    withSaveAction = false,
-  ) => {
-    const parts = getTimeParts(set[field]);
-    const minutesValue = parts.minutes;
-    const secondsValue = parts.seconds;
-
-    return (
-      <View style={styles.timeInputRow}>
-        <TextInput
-          style={[styles.input, styles.timePartInput]}
-          value={minutesValue}
-          onChangeText={(value) =>
-            updateTimePart(set.id, field, "minutes", value)
-          }
-          placeholder="mm"
-          keyboardType="number-pad"
-          autoFocus={withSaveAction}
-          selectTextOnFocus
-        />
-        <Text style={styles.timeSeparator}>:</Text>
-        <TextInput
-          style={[styles.input, styles.timePartInput]}
-          value={secondsValue}
-          onChangeText={(value) =>
-            updateTimePart(set.id, field, "seconds", value)
-          }
-          placeholder="ss"
-          keyboardType="number-pad"
-          selectTextOnFocus
-        />
-      </View>
-    );
-  };
-
   useEffect(() => {
     setsRef.current = sets;
   }, [sets]);
@@ -534,9 +660,11 @@ export default function Exercise({
   }, [sets]);
 
   const handleSaveSet = async (setId: number) => {
-    if (savingSetId !== null) return;
+    if (savingSetId !== null) return false;
     const latestSet = setsRef.current.find((item) => item.id === setId);
-    if (!latestSet) return;
+    if (!latestSet) return false;
+
+    const wasSaved = latestSet.saved;
 
     setSavingSetId(setId);
     try {
@@ -552,7 +680,7 @@ export default function Exercise({
 
       if (!savedValues) {
         onNotify(t("couldNotSaveSet"), "error");
-        return;
+        return false;
       }
 
       setSets((previous) =>
@@ -581,7 +709,11 @@ export default function Exercise({
       );
       clearCountdownForField(setId, "exerciseTypeValue");
       clearCountdownForField(setId, "restTime");
+      if (!wasSaved) {
+        setActiveAddSetId(null);
+      }
       onNotify(t("saved"), "success");
+      return true;
     } finally {
       setSavingSetId(null);
     }
@@ -595,6 +727,9 @@ export default function Exercise({
 
     if (!targetSet.saved) {
       setSets((previous) => previous.filter((item) => item.id !== setId));
+      if (activeAddSetId === setId) {
+        setActiveAddSetId(null);
+      }
       onNotify(t("setDeleted"), "success");
       return;
     }
@@ -676,6 +811,8 @@ export default function Exercise({
 
   const activeEditingSet =
     sets.find((set) => set.editingField !== null) ?? null;
+  const activeAddSet =
+    sets.find((set) => set.id === activeAddSetId && !set.saved) ?? null;
 
   if (collapsed) {
     return (
@@ -748,125 +885,209 @@ export default function Exercise({
           <Text style={styles.addSetButtonText}>{t("addSet")}</Text>
         </Pressable>
 
-        {sets.map((set, index) => (
-          <View key={set.id} style={styles.setCard}>
-            <View style={styles.setHeader}>
-              <Text style={styles.setTitle}>
-                {t("set")} {index + 1}
-              </Text>
-              <Pressable
-                style={styles.menuTrigger}
-                onPress={() =>
-                  setMenuSetId((previous) =>
-                    previous === set.id ? null : set.id,
-                  )
-                }
-              >
-                <Text style={styles.menuTriggerText}>⋯</Text>
-              </Pressable>
-            </View>
-            {menuSetId === set.id ? (
-              <View style={styles.menuContainer}>
+        {sets.map((set, index) =>
+          !set.saved && activeAddSetId === set.id ? null : (
+            <View key={set.id} style={styles.setCard}>
+              <View style={styles.setHeader}>
+                <Text style={styles.setTitle}>
+                  {t("set")} {index + 1}
+                </Text>
                 <Pressable
-                  style={styles.menuItem}
-                  onPress={() => handleDeleteSet(set.id)}
+                  style={styles.menuTrigger}
+                  onPress={() =>
+                    setMenuSetId((previous) =>
+                      previous === set.id ? null : set.id,
+                    )
+                  }
                 >
-                  <Text style={styles.menuItemDeleteText}>
-                    {t("deleteSet")}
-                  </Text>
+                  <Text style={styles.menuTriggerText}>⋯</Text>
                 </Pressable>
               </View>
-            ) : null}
-            {set.saved ? (
-              <View style={styles.savedRow}>
-                <View>
+              {menuSetId === set.id ? (
+                <View style={styles.menuContainer}>
                   <Pressable
-                    onPress={() =>
-                      startEditingField(set.id, "exerciseTypeValue")
-                    }
+                    style={styles.menuItem}
+                    onPress={() => handleDeleteSet(set.id)}
                   >
-                    <Text style={styles.savedValueText}>
-                      {isTimerType
-                        ? `${t("workTime")}: ${formatSeconds(set.savedExerciseTypeValue ?? 0)}`
-                        : `${set.savedExerciseTypeValue ?? 0}x`}
+                    <Text style={styles.menuItemDeleteText}>
+                      {t("deleteSet")}
                     </Text>
                   </Pressable>
-                  {isTimerType
-                    ? renderCountdownControls(set, "exerciseTypeValue")
-                    : null}
                 </View>
-
-                {hasWeight ? (
-                  <Pressable
-                    onPress={() => startEditingField(set.id, "weight")}
-                  >
-                    <Text style={styles.savedValueText}>
-                      {(set.savedWeight ?? 0).toFixed(2)} kg
+              ) : null}
+              {set.saved ? (
+                <View style={styles.savedTable}>
+                  <View style={styles.savedTableHeaderRow}>
+                    <Text style={styles.savedTableHeaderText}>
+                      {isTimerType ? t("workTime") : t("reps")}
                     </Text>
-                  </Pressable>
-                ) : null}
-
-                <View>
-                  <Pressable
-                    onPress={() => startEditingField(set.id, "restTime")}
-                  >
-                    <Text style={styles.savedValueText}>
-                      {t("rest")}: {formatSeconds(set.savedRestTime ?? 0)}
+                    {hasWeight ? (
+                      <Text style={styles.savedTableHeaderText}>
+                        {t("weight")}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.savedTableHeaderText}>
+                      {t("restTime")}
                     </Text>
-                  </Pressable>
-                  {renderCountdownControls(set, "restTime")}
+                  </View>
+
+                  <View style={styles.savedTableValuesRow}>
+                    <View style={styles.savedTableCell}>
+                      {isTimerType ? (
+                        renderCountdownControls(set, "exerciseTypeValue", {
+                          allowInlineEdit: false,
+                          onEditPress: () =>
+                            startEditingField(set.id, "exerciseTypeValue"),
+                        })
+                      ) : (
+                        <Pressable
+                          onPress={() =>
+                            startEditingField(set.id, "exerciseTypeValue")
+                          }
+                        >
+                          <Text style={styles.savedValueText}>
+                            {`${set.savedExerciseTypeValue ?? 0}x`}
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
+
+                    {hasWeight ? (
+                      <View style={styles.savedTableCell}>
+                        <Pressable
+                          onPress={() => startEditingField(set.id, "weight")}
+                        >
+                          <Text style={styles.savedValueText}>
+                            {(set.savedWeight ?? 0).toFixed(2)} kg
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.savedTableCell}>
+                      {renderCountdownControls(set, "restTime", {
+                        allowInlineEdit: false,
+                        onEditPress: () =>
+                          startEditingField(set.id, "restTime"),
+                      })}
+                    </View>
+                  </View>
                 </View>
-              </View>
-            ) : (
+              ) : (
+                <View style={styles.unsavedSetActions}>
+                  <Pressable
+                    style={styles.saveSetButton}
+                    onPress={() => setActiveAddSetId(set.id)}
+                  >
+                    <Text style={styles.saveSetButtonText}>{t("saveSet")}</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          ),
+        )}
+      </View>
+
+      <Modal
+        visible={activeAddSet !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!activeAddSet) {
+            return;
+          }
+
+          setSets((previous) =>
+            previous.filter((set) => set.id !== activeAddSet.id),
+          );
+          setActiveAddSetId(null);
+        }}
+      >
+        <View style={styles.editModalBackdrop}>
+          <View style={styles.editModalCard}>
+            {activeAddSet ? (
               <>
                 {isTimerType ? (
-                  <View>
-                    <Text style={styles.timeFieldLabel}>{t("workTime")}</Text>
-                    {renderTimeInputs(set, "exerciseTypeValue")}
-                    {renderCountdownControls(set, "exerciseTypeValue")}
-                  </View>
+                  <>
+                    <Text style={styles.editModalTitle}>{t("workTime")}</Text>
+                    {renderModalTimerInput(
+                      activeAddSet,
+                      "exerciseTypeValue",
+                      true,
+                    )}
+                  </>
                 ) : (
-                  <View style={styles.valueWithSuffixRow}>
-                    <TextInput
-                      style={styles.input}
-                      value={set.exerciseTypeValue}
-                      onChangeText={(value) =>
-                        updateSet(set.id, "exerciseTypeValue", value)
-                      }
-                      placeholder="0"
-                      keyboardType="numeric"
-                    />
-                    <Text style={styles.savedValueText}>x</Text>
-                  </View>
+                  <>
+                    <Text style={styles.editModalTitle}>Reps</Text>
+                    <View style={styles.valueWithSuffixRow}>
+                      <TextInput
+                        style={[styles.input, styles.modalNumericInput]}
+                        value={activeAddSet.exerciseTypeValue}
+                        onChangeText={(value) =>
+                          updateSet(activeAddSet.id, "exerciseTypeValue", value)
+                        }
+                        autoFocus
+                        keyboardType="numeric"
+                      />
+                      <Text style={styles.savedValueText}>x</Text>
+                    </View>
+                  </>
                 )}
+
                 {hasWeight ? (
-                  <TextInput
-                    style={styles.input}
-                    value={set.weight}
-                    onChangeText={(value) => updateSet(set.id, "weight", value)}
-                    placeholder="0.00 kg"
-                    keyboardType="decimal-pad"
-                  />
+                  <>
+                    <Text style={styles.timeFieldLabel}>Weight</Text>
+                    <TextInput
+                      style={[styles.input, styles.modalNumericInput]}
+                      value={activeAddSet.weight}
+                      onChangeText={(value) =>
+                        updateSet(activeAddSet.id, "weight", value)
+                      }
+                      placeholder="0.00 kg"
+                      keyboardType="decimal-pad"
+                    />
+                  </>
                 ) : null}
-                <View>
-                  <Text style={styles.timeFieldLabel}>{t("restTime")}</Text>
-                  {renderTimeInputs(set, "restTime")}
-                  {renderCountdownControls(set, "restTime")}
+
+                <Text style={styles.editModalTitle}>{t("restTime")}</Text>
+                {renderModalTimerInput(activeAddSet, "restTime")}
+
+                <View style={styles.editModalActions}>
+                  <Pressable
+                    style={styles.editModalCancelButton}
+                    onPress={() => {
+                      setSets((previous) =>
+                        previous.filter((set) => set.id !== activeAddSet.id),
+                      );
+                      setActiveAddSetId(null);
+                    }}
+                  >
+                    <Text style={styles.editModalCancelButtonText}>
+                      {t("cancel")}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.editModalSaveButton}
+                    onPress={async () => {
+                      const saved = await handleSaveSet(activeAddSet.id);
+                      if (saved) {
+                        setActiveAddSetId(null);
+                      }
+                    }}
+                    disabled={savingSetId === activeAddSet.id}
+                  >
+                    <Text style={styles.editModalSaveButtonText}>
+                      {savingSetId === activeAddSet.id
+                        ? t("saving")
+                        : t("saveSet")}
+                    </Text>
+                  </Pressable>
                 </View>
-                <Pressable
-                  style={styles.saveSetButton}
-                  onPress={() => handleSaveSet(set.id)}
-                  disabled={savingSetId === set.id}
-                >
-                  <Text style={styles.saveSetButtonText}>
-                    {savingSetId === set.id ? t("saving") : t("saveSet")}
-                  </Text>
-                </Pressable>
               </>
-            )}
+            ) : null}
           </View>
-        ))}
-      </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={activeEditingSet !== null}
@@ -884,7 +1105,7 @@ export default function Exercise({
               isTimerType ? (
                 <>
                   <Text style={styles.editModalTitle}>{t("workTime")}</Text>
-                  {renderTimeInputs(
+                  {renderModalTimerInput(
                     activeEditingSet,
                     "exerciseTypeValue",
                     true,
@@ -934,7 +1155,7 @@ export default function Exercise({
             {activeEditingSet?.editingField === "restTime" ? (
               <>
                 <Text style={styles.editModalTitle}>{t("restTime")}</Text>
-                {renderTimeInputs(activeEditingSet, "restTime", true)}
+                {renderModalTimerInput(activeEditingSet, "restTime", true)}
               </>
             ) : null}
 
@@ -1110,11 +1331,28 @@ const styles = StyleSheet.create({
   saveSetButtonText: {
     fontWeight: "600",
   },
-  savedRow: {
+  savedTable: {
     marginTop: 6,
+  },
+  savedTableHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 8,
+  },
+  savedTableHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#555",
+  },
+  savedTableValuesRow: {
+    marginTop: 4,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  savedTableCell: {
+    flex: 1,
   },
   savedValueText: {
     fontSize: 13,
@@ -1169,6 +1407,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  unsavedSetActions: {
+    marginTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
   timerControlsRow: {
     marginTop: 6,
     flexDirection: "row",
@@ -1180,6 +1424,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     minWidth: 56,
+  },
+  timerCountdownInput: {
+    marginTop: 0,
+    minWidth: 92,
+    textAlign: "center",
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    borderWidth: 0,
+    fontSize: 13,
+    textDecorationLine: "underline",
   },
   timerControlButton: {
     backgroundColor: "#efefef",
@@ -1214,6 +1468,10 @@ const styles = StyleSheet.create({
   },
   modalNumericInput: {
     minWidth: 120,
+  },
+  modalTimerInput: {
+    minWidth: 120,
+    textAlign: "center",
   },
   editModalActions: {
     marginTop: 14,
