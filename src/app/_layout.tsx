@@ -7,7 +7,12 @@ export default function RootLayout() {
 
   return (
     <SQLiteProvider databaseName="timervall.db" onInit={createDbIfNeeded}>
-      <Stack>
+      <Stack
+        screenOptions={{
+          contentStyle: { backgroundColor: "#fff" },
+          headerStyle: { backgroundColor: "#fff" },
+        }}
+      >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
     </SQLiteProvider>

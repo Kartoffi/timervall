@@ -166,7 +166,7 @@ export async function createTablesAndDefaults(db: SQLiteDatabase) {
   if (!colorSetting) {
     await db.runAsync(
       "INSERT INTO settings (id, name, value, category_id, setting_type_id) VALUES (?, ?, ?, ?, ?)",
-      [2, "Hauptfarbe", "#813dffff", layoutCatId, 5],
+      [2, "Hauptfarbe", "#4b7c9dff", layoutCatId, 5],
     );
   }
 

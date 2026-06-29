@@ -2,14 +2,14 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { useSQLiteContext } from "expo-sqlite";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { useTranslation } from "../../i18n/useTranslation";
 import Button from "../components/Button";
@@ -24,9 +24,11 @@ type ExerciseType = {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: "#fff",
   },
   container: {
     flex: 1,
+    backgroundColor: "#fff",
   },
   containerContent: {
     paddingHorizontal: 20,

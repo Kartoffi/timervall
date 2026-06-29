@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,7 +17,14 @@ import Workout from "../components/Workout";
 
 export default function Index() {
   const database = useSQLiteContext();
-  const [workouts, setWorkouts] = useState<{ id: number; name: string }[]>([]);
+  const [workouts, setWorkouts] = useState<
+    {
+      id: number;
+      name: string;
+      completedSessionsCount: number;
+      exercisesCount: number;
+    }[]
+  >([]);
   const [text, setText] = useState("");
   const [addWorkoutModalVisible, setAddWorkoutModalVisible] = useState(false);
   const [addingWorkout, setAddingWorkout] = useState(false);
@@ -40,8 +48,31 @@ export default function Index() {
 
   const fetchWorkouts = useCallback(async () => {
     try {
-      const result: { id: number; name: string }[] = await database.getAllAsync(
-        "SELECT id, name FROM workouts WHERE deleted_at IS NULL ORDER BY id ASC;",
+      const result: {
+        id: number;
+        name: string;
+        completedSessionsCount: number;
+        exercisesCount: number;
+      }[] = await database.getAllAsync(
+        `SELECT
+          w.id,
+          w.name,
+          (
+            SELECT COUNT(*)
+            FROM workout_sessions ws
+            WHERE ws.workout_id = w.id
+              AND ws.workout_finished_at IS NOT NULL
+              AND ws.deleted_at IS NULL
+          ) AS completedSessionsCount,
+          (
+            SELECT COUNT(*)
+            FROM workout_exercises we
+            WHERE we.workout_id = w.id
+              AND we.deleted_at IS NULL
+          ) AS exercisesCount
+        FROM workouts w
+        WHERE w.deleted_at IS NULL
+        ORDER BY w.id ASC;`,
       );
       setWorkouts(result);
     } catch (error) {
@@ -96,11 +127,27 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <Button
-        label={t("addWorkout")}
-        action={() => setAddWorkoutModalVisible(true)}
-        disabled={addingWorkout}
-      />
+      <ScrollView
+        style={styles.listContainer}
+        contentContainerStyle={styles.listContent}
+      >
+        {workouts.map((workout) => (
+          <Workout
+            key={workout.id}
+            workout={workout}
+            onDelete={handleDeleteWorkout}
+          />
+        ))}
+      </ScrollView>
+
+      <View style={styles.bottomBar}>
+        <Button
+          label={t("addWorkout")}
+          action={() => setAddWorkoutModalVisible(true)}
+          disabled={addingWorkout}
+        />
+      </View>
+
       <Modal
         visible={addWorkoutModalVisible}
         transparent
@@ -134,17 +181,6 @@ export default function Index() {
           </View>
         </View>
       </Modal>
-      {/* <Link href="/options" style={styles.link}>
-        Go to Options
-      </Link> */}
-      {workouts.map((workout) => (
-        <Workout
-          key={workout.id}
-          label={workout.name}
-          id={workout.id}
-          onDelete={handleDeleteWorkout}
-        />
-      ))}
       <Notification
         key={notification?.key ?? 0}
         message={notification?.message ?? null}
@@ -163,8 +199,25 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    backgroundColor: "#fff",
+  },
+  listContainer: {
+    flex: 1,
+    width: "100%",
+  },
+  listContent: {
     alignItems: "center",
-    justifyContent: "flex-start",
+    paddingTop: 10,
+    paddingBottom: 16,
+  },
+  bottomBar: {
+    width: "100%",
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 14,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#e5e5e5",
   },
   input: {
     height: 40,

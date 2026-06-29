@@ -6,7 +6,7 @@ import { useTranslation } from "../../i18n/useTranslation";
 
 export default function TabLayout() {
   const db = useSQLiteContext();
-  const [primaryColor, setPrimaryColor] = useState("#813dffff"); // fallback color
+  const [primaryColor, setPrimaryColor] = useState("#4b7c9dff"); // fallback color
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -29,6 +29,9 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: primaryColor,
+        sceneStyle: { backgroundColor: "#fff" },
+        headerStyle: { backgroundColor: "#fff" },
+        tabBarStyle: { backgroundColor: "#fff" },
       }}
     >
       <Tabs.Screen
